@@ -1,2 +1,1 @@
-# chocolatey-sonos-controller
-A repository for automating the update process of the Sonos Controller Chocolatey package
+This repository is empty. Any task executed on it should be considered a new capability and needs to be created.
