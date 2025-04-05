@@ -38,6 +38,6 @@ jobs:
           git push
 
       - name: Push package to Chocolatey registry
-        uses: chocolatey/choco@v1
+        uses: chocolatey/generic@v1 # Ensure the correct reference is used here
         with:
           args: push chocolatey/sonos-controller.nuspec --source https://push.chocolatey.org/
