@@ -1,0 +1,42 @@
+name: Scheduled Update Sonos Controller Package
+
+on:
+  schedule:
+    - cron: '0 0 * * 0' # Runs every Sunday at midnight
+
+jobs:
+  update-package:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v2
+
+      - name: Check for updates to Sonos Controller binary
+        run: |
+          mkdir -p downloads
+          curl -L -o downloads/sonos-controller.exe https://www.sonos.com/redir/controller_software_pc2
+
+      - name: Calculate hash of the downloaded binary
+        run: |
+          sha256sum downloads/sonos-controller.exe > downloads/sonos-controller.sha256
+
+      - name: Update necessary files with new URL and hash
+        run: |
+          HASH=$(cut -d ' ' -f 1 downloads/sonos-controller.sha256)
+          sed -i "s|<version>.*</version>|<version>16.0.0.401</version>|" chocolatey/sonos-controller.nuspec
+          sed -i "s|<url>.*</url>|<url>https://www.sonos.com/redir/controller_software_pc2</url>|" chocolatey/sonos-controller.nuspec
+          sed -i "s|<checksum>.*</checksum>|<checksum>$HASH</checksum>|" chocolatey/sonos-controller.nuspec
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add chocolatey/sonos-controller.nuspec
+          git commit -m "Update Sonos Controller package with latest binary and hash"
+          git push
+
+      - name: Push package to Chocolatey registry
+        uses: chocolatey/choco@v1
+        with:
+          args: push chocolatey/sonos-controller.nuspec --source https://push.chocolatey.org/

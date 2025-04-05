@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd">
+  <metadata>
+    <id>sonos-controller</id>
+    <version>16.0.0.401</version>
+    <title>Sonos Controller S2</title>
+    <authors>Sonos</authors>
+    <owners>foo.li systeme + software, felix schwenk</owners>
+    <licenseUrl>https://www.sonos.com/support</licenseUrl>
+    <projectUrl>https://www.sonos.com/support</projectUrl>
+    <iconUrl>https://assets.sonos.com/care/kb/images/FAQ4786/SonosS2.png</iconUrl>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
+    <description>Take total control of your home listening experience with the Sonos app. Play, control and explore your music, your way. Built for mobile, tablet and desktop, the Sonos app connects you to all the music on earth, all over your home. Version up to 11.x is Sonos Controller S1, beginning with 12.x it is Sonos Controller S2.</description>
+    <summary>Sonos Desktop Controller</summary>
+    <releaseNotes>Update to 16.0.0.400 (78.1.51030) -  this is actually 16.0.0.400 but as I made a mistake uploading the package, the only way to fix was to increase the package number.</releaseNotes>
+    <language>de-LI</language>
+    <tags>sonos audio streaming</tags>
+    <url>https://www.sonos.com/redir/controller_software_pc2</url>
+    <checksum>03041f39d4f183e5c523e3d63997063afcfad5d4cc956f5f478a59e6c80b62a8</checksum>
+  </metadata>
+</package>
