@@ -16,6 +16,10 @@ Use the workflow “Update and Publish Chocolatey Package”:
 - `commit_push`: commit updated files to `main`.
 - `publish`: build `.nupkg` and push to Chocolatey (needs `CHOCO_API_KEY` secret).
 
+Notes
+-----
+- The workflow requests `contents: write` permission. If it cannot push to `main` (e.g., branch protections), it automatically opens a PR with the changes.
+
 Local Build & Test
 ------------------
 1. Download + hash (optionally): `bash scripts/download_and_hash.sh` (Linux/macOS).
