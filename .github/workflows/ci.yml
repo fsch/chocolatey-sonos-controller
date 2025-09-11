@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify nuspec and install script consistency
+        shell: bash
+        run: |
+          set -euo pipefail
+          NUSPEC=chocolatey/sonos-controller.nuspec
+          PS1=chocolatey/ChocolateyInstall.ps1
+
+          nv=$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' "$NUSPEC")
+          nu=$(sed -n 's:.*<url>\(.*\)</url>.*:\1:p' "$NUSPEC")
+          nh=$(sed -n 's:.*<checksum>\(.*\)</checksum>.*:\1:p' "$NUSPEC")
+
+          pv=$(sed -n "s/\$version\s*=\s*'\(.*\)'/\1/p" "$PS1")
+          pu=$(sed -n "s/\$url\s*=\s*'\(.*\)'/\1/p" "$PS1")
+          ph=$(sed -n "s/\$checksum\s*=\s*'\(.*\)'/\1/p" "$PS1")
+
+          echo "nuspec version=$nv url=$nu checksum=$nh"
+          echo "ps1    version=$pv url=$pu checksum=$ph"
+
+          test -n "$nv" && test -n "$pv" && [ "$nv" = "$pv" ] || { echo "Version mismatch"; exit 1; }
+          test -n "$nu" && test -n "$pu" && [ "$nu" = "$pu" ] || { echo "URL mismatch"; exit 1; }
+          test -n "$nh" && test -n "$ph" && [ "$nh" = "$ph" ] || { echo "Checksum mismatch"; exit 1; }
+
+      - name: Ensure no binaries committed
+        shell: bash
+        run: |
+          ! git ls-files | grep -Ei '\\.(exe|msi|zip|7z|nupkg)$' || { echo "Binary artifacts should not be committed"; exit 1; }
+

@@ -1,0 +1,14 @@
+# Build artifacts
+*.nupkg
+out/
+
+# Downloads and temp files
+downloads/
+*.log
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
