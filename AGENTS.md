@@ -25,7 +25,7 @@
 ## Commit & Pull Request Guidelines
 - Commits: imperative tense, concise scope (e.g., "chore: update to 16.0.0.401").
 - PRs: include version, URL, checksum, validation steps, and link any related issues. Screenshots optional.
-- CI: `CI` checks ensure nuspec/PS1 consistency and block binaries. Use `Update and Publish Chocolatey Package` (manual) to update/publish.
+- CI: `CI` checks ensure nuspec/PS1 consistency and block binaries. Use `Update and Publish Chocolatey Package` (manual) to update/publish. If `version` is not provided, the workflow auto-detects the EXE file version.
 
 ## Security & Configuration Tips
 - Never commit downloaded binaries or secrets. Configure Chocolatey API key locally: `choco apikey -k <KEY> -s https://push.chocolatey.org/`.

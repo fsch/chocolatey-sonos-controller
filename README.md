@@ -10,11 +10,11 @@ Getting Started
 
 Manual Update & Publish (GitHub Actions)
 ----------------------------------------
-Use the workflow “Update and Publish Chocolatey Package” and provide:
-- `version`: e.g., `16.0.0.401`
-- `url`: default is the official Sonos download URL
-- `commit_push`: commit updated files to `main`
-- `publish`: build `.nupkg` and push to Chocolatey (needs `CHOCO_API_KEY` secret)
+Use the workflow “Update and Publish Chocolatey Package”:
+- `url`: default is the official Sonos download URL.
+- `version` (optional): if omitted, the workflow extracts the file version from the downloaded EXE.
+- `commit_push`: commit updated files to `main`.
+- `publish`: build `.nupkg` and push to Chocolatey (needs `CHOCO_API_KEY` secret).
 
 Local Build & Test
 ------------------

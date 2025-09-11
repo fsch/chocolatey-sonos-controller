@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Package version (e.g., 16.0.0.401)"
-        required: true
+        description: "Optional: override version (else auto-detect from EXE)"
+        required: false
       url:
         description: "Download URL for Sonos Controller"
         required: true
@@ -31,7 +31,7 @@ jobs:
       - name: Set variables
         shell: pwsh
         run: |
-          echo "VERSION=${{ github.event.inputs.version }}" >> $env:GITHUB_ENV
+          if ('${{ github.event.inputs.version }}') { echo "VERSION=${{ github.event.inputs.version }}" >> $env:GITHUB_ENV }
           echo "PKG_URL=${{ github.event.inputs.url }}" >> $env:GITHUB_ENV
 
       - name: Download installer
@@ -45,6 +45,19 @@ jobs:
         run: |
           $hash = (Get-FileHash downloads/sonos-controller.exe -Algorithm SHA256).Hash.ToLower()
           echo "SHA256=$hash" >> $env:GITHUB_ENV
+
+      - name: Extract version from EXE (if not provided)
+        shell: pwsh
+        run: |
+          if (-not $env:VERSION -or -not $env:VERSION.Trim()) {
+            $vi = (Get-Item 'downloads/sonos-controller.exe').VersionInfo
+            $raw = @($vi.ProductVersion, $vi.FileVersion) | Where-Object { $_ -and ($_ -match '\d') } | Select-Object -First 1
+            if (-not $raw) { throw 'No version info found on EXE' }
+            $m = [regex]::Match($raw, '(\d+\.\d+\.\d+(?:\.\d+)?)')
+            if (-not $m.Success) { throw "Could not parse version from '$raw'" }
+            $ver = $m.Value
+            echo "VERSION=$ver" >> $env:GITHUB_ENV
+          }
 
       - name: Update nuspec and install script
         shell: pwsh
@@ -95,4 +108,3 @@ jobs:
           if (-not $env:CHOCO_API_KEY) { throw "Missing CHOCO_API_KEY secret" }
           choco apikey -k $env:CHOCO_API_KEY -s https://push.chocolatey.org/
           choco push (Get-ChildItem out/*.nupkg | Select-Object -First 1).FullName --source https://push.chocolatey.org/
-
