@@ -75,8 +75,6 @@ jobs:
           # Update nuspec fields
           (Get-Content $nuspec) `
             -replace '<version>.*?</version>', "<version>$env:VERSION</version>" `
-            -replace '<url>.*?</url>', "<url>$env:PKG_URL</url>" `
-            -replace '<checksum>.*?</checksum>', "<checksum>$env:SHA256</checksum>" `
             | Set-Content $nuspec -Encoding UTF8
 
           # Update install script variables

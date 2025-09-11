@@ -15,7 +15,5 @@
     <releaseNotes>Update to 16.0.0.400 (78.1.51030) -  this is actually 16.0.0.400 but as I made a mistake uploading the package, the only way to fix was to increase the package number.</releaseNotes>
     <language>de-LI</language>
     <tags>sonos audio streaming</tags>
-    <url>https://www.sonos.com/redir/controller_software_pc2</url>
-    <checksum>1a90fb565d9a2d077af52441d1f66312ca134a4732ad0c084587f72bdc4e14d0</checksum>
   </metadata>
 </package>

@@ -23,7 +23,7 @@ Notes
 Local Build & Test
 ------------------
 1. Download + hash (optionally): `bash scripts/download_and_hash.sh` (Linux/macOS).
-2. Update version/URL/checksum in both files.
+2. Update version in `sonos-controller.nuspec`; update URL and checksum only in `ChocolateyInstall.ps1`.
 3. Pack: `choco pack chocolatey/sonos-controller.nuspec` → `out/*.nupkg`.
 4. Install test: `choco install sonos-controller --source out -y`.
 

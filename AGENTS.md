@@ -7,7 +7,7 @@
 
 ## Build, Test, and Development Commands
 - Fetch + hash locally (Linux/macOS): `bash scripts/download_and_hash.sh` → see `downloads/sonos-controller-info.txt`.
-- Update fields: bump `<version>`, `<url>`, and `<checksum>` in `chocolatey/sonos-controller.nuspec`; mirror `version`, `url`, and `checksum` in `ChocolateyInstall.ps1`.
+- Update fields: bump `<version>` in `chocolatey/sonos-controller.nuspec`; set `url` and `checksum` in `ChocolateyInstall.ps1`.
 - Pack (Windows with Chocolatey): `choco pack chocolatey/sonos-controller.nuspec` → produces `.nupkg` in `out/`.
 - Install locally for validation: `choco install sonos-controller --source out -y`.
 - Publish (requires API key): `choco push out/<pkg>.nupkg --source https://push.chocolatey.org/`.

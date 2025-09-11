@@ -20,22 +20,23 @@ jobs:
           PS1=chocolatey/ChocolateyInstall.ps1
 
           nv=$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' "$NUSPEC")
-          nu=$(sed -n 's:.*<url>\(.*\)</url>.*:\1:p' "$NUSPEC")
-          nh=$(sed -n 's:.*<checksum>\(.*\)</checksum>.*:\1:p' "$NUSPEC")
 
           pv=$(sed -n "s/\$version\s*=\s*'\(.*\)'/\1/p" "$PS1")
           pu=$(sed -n "s/\$url\s*=\s*'\(.*\)'/\1/p" "$PS1")
           ph=$(sed -n "s/\$checksum\s*=\s*'\(.*\)'/\1/p" "$PS1")
 
-          echo "nuspec version=$nv url=$nu checksum=$nh"
+          echo "nuspec version=$nv"
           echo "ps1    version=$pv url=$pu checksum=$ph"
 
           test -n "$nv" && test -n "$pv" && [ "$nv" = "$pv" ] || { echo "Version mismatch"; exit 1; }
-          test -n "$nu" && test -n "$pu" && [ "$nu" = "$pu" ] || { echo "URL mismatch"; exit 1; }
-          test -n "$nh" && test -n "$ph" && [ "$nh" = "$ph" ] || { echo "Checksum mismatch"; exit 1; }
+
+          # Assert nuspec does not contain invalid 'url' or 'checksum' elements
+          if grep -qE '<(url|checksum)>' "$NUSPEC"; then echo "Invalid elements (url/checksum) found in nuspec"; exit 1; fi
+          # Assert PS1 has required fields
+          test -n "$pu" || { echo "PS1 missing $url"; exit 1; }
+          test -n "$ph" || { echo "PS1 missing $checksum"; exit 1; }
 
       - name: Ensure no binaries committed
         shell: bash
         run: |
           ! git ls-files | grep -Ei '\\.(exe|msi|zip|7z|nupkg)$' || { echo "Binary artifacts should not be committed"; exit 1; }
-
