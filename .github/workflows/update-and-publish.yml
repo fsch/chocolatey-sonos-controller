@@ -58,11 +58,17 @@ jobs:
         run: |
           if (-not $env:VERSION -or -not $env:VERSION.Trim()) {
             $vi = (Get-Item 'downloads/sonos-controller.exe').VersionInfo
-            $raw = @($vi.ProductVersion, $vi.FileVersion) | Where-Object { $_ -and ($_ -match '\d') } | Select-Object -First 1
-            if (-not $raw) { throw 'No version info found on EXE' }
-            $m = [regex]::Match($raw, '(\d+\.\d+\.\d+(?:\.\d+)?)')
-            if (-not $m.Success) { throw "Could not parse version from '$raw'" }
-            $ver = $m.Value
+            function Normalize-Version($s) {
+              if (-not $s) { return $null }
+              $m = [regex]::Match($s, '(\d+\.\d+\.\d+(?:\.\d+)?)')
+              if ($m.Success) { return $m.Value } else { return $null }
+            }
+            $prod = Normalize-Version $vi.ProductVersion
+            $file = Normalize-Version $vi.FileVersion
+
+            # Prefer FileVersion (e.g., 16.x) over ProductVersion (e.g., 90.x)
+            $ver = if ($file) { $file } elseif ($prod) { $prod } else { $null }
+            if (-not $ver) { throw 'No version info found on EXE' }
             echo "VERSION=$ver" >> $env:GITHUB_ENV
           }
 
