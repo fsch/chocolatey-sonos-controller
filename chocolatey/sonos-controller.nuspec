@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd">
   <metadata>
     <id>sonos-controller</id>
-    <version>90.0.67300</version>
+    <version>90.0.68190</version>
     <title>Sonos Controller S2</title>
     <authors>Sonos</authors>
     <owners>foo.li systeme + software, felix schwenk</owners>
