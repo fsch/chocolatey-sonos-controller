@@ -104,11 +104,29 @@ jobs:
             -replace '<version>.*?</version>', "<version>$env:VERSION</version>" `
             | Set-Content $nuspec -Encoding UTF8
 
-          # Update install script variables
+          # Update install script variables.
+          #
+          # IMPORTANT: the regex *patterns* are single-quoted PowerShell
+          # strings on purpose. In double-quoted strings, "\$version" is
+          # parsed as a literal backslash followed by an interpolated
+          # $version variable (PS escape char is backtick, not backslash).
+          # Since $version is unset in the runner shell, the resulting regex
+          # becomes "\\s*=\s*'.*?'" and matches nothing -- the install script
+          # is silently never updated, the nuspec marches forward alone, and
+          # the published .nupkg ships with a stale $version + $checksum.
+          # See the incident on 2026-04-14 (90.0.68190 published broken).
+          #
+          # Single-quoting the patterns disables interpolation entirely, so
+          # \$ stays as a literal backslash + dollar, which the .NET regex
+          # engine then reads as an escaped literal $. Single quotes inside
+          # a single-quoted string are escaped by doubling them ('').
+          # The replacement strings stay double-quoted so $env:VERSION etc.
+          # still interpolate; the literal $version in the output is
+          # protected by the backtick escape (`$version).
           (Get-Content $ps1) `
-            -replace "\$version\s*=\s*'.*?'", "`$version = '$env:VERSION'" `
-            -replace "\$url\s*=\s*'.*?'", "`$url = '$env:PKG_URL'" `
-            -replace "\$checksum\s*=\s*'.*?'", "`$checksum = '$env:SHA256'" `
+            -replace '\$version\s*=\s*''.*?''',  "`$version = '$env:VERSION'" `
+            -replace '\$url\s*=\s*''.*?''',      "`$url = '$env:PKG_URL'" `
+            -replace '\$checksum\s*=\s*''.*?''', "`$checksum = '$env:SHA256'" `
             | Set-Content $ps1 -Encoding UTF8
 
       - name: Show changes
