@@ -4,11 +4,11 @@
 $packageName	= 'sonos-controller'
 $packageSearch  = 'Sonos Controller'
 $installerType	= 'exe'
-$version 		= '90.0.67300'
+$version 		= '90.0.68190'
 $url			= 'https://www.sonos.com/redir/controller_software_pc2'
 $silentArgs		= '/s /v"/qn"'
 $validExitCodes	= @(0,3010)
-$checksum       = '1a90fb565d9a2d077af52441d1f66312ca134a4732ad0c084587f72bdc4e14d0'
+$checksum       = 'a5876796498a24241b5a4e94e5f9e3fe8dd50de79d573e9ca75bf25c9494768f'
 $checksumType   = 'sha256'
 
 $app = Get-ItemProperty -Path @('HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
