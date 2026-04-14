@@ -28,6 +28,9 @@ on:
 jobs:
   update:
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.export.outputs.version }}
+      sha256: ${{ steps.export.outputs.sha256 }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -136,16 +139,53 @@ jobs:
             
             This PR was created because the workflow could not push directly to main or direct push was disabled.
 
-      - name: Setup Chocolatey
+      - name: Export version/sha for publish job
+        id: export
+        shell: bash
+        run: |
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA256"   >> "$GITHUB_OUTPUT"
+
+      - name: Upload updated package sources
         if: ${{ fromJSON(github.event.inputs.publish) }}
-        uses: crazy-max/ghaction-chocolatey@v3
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-sources
+          path: |
+            chocolatey/sonos-controller.nuspec
+            chocolatey/ChocolateyInstall.ps1
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    # This job consumes CHOCO_API_KEY and is gated by the `chocolatey-publish`
+    # environment -- a maintainer must approve the deployment from the Actions
+    # UI before the job starts. The environment is created in repo Settings ->
+    # Environments with `@fsch` as a required reviewer, and CHOCO_API_KEY is
+    # stored as an environment-scoped secret (not a repo-level secret).
+    # See SECURITY.md.
+    needs: update
+    if: ${{ fromJSON(github.event.inputs.publish) }}
+    runs-on: windows-latest
+    environment: chocolatey-publish
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download updated package sources
+        uses: actions/download-artifact@v4
+        with:
+          name: package-sources
+          path: chocolatey
 
       - name: Pack and Push to Chocolatey
-        if: ${{ fromJSON(github.event.inputs.publish) }}
         shell: pwsh
         env:
           CHOCO_API_KEY: ${{ secrets.CHOCO_API_KEY }}
+          VERSION: ${{ needs.update.outputs.version }}
+          SHA256:  ${{ needs.update.outputs.sha256 }}
         run: |
+          Write-Host "Publishing version $env:VERSION (sha256 $env:SHA256)"
           choco pack chocolatey/sonos-controller.nuspec --outputdirectory out
           if (-not $env:CHOCO_API_KEY) { throw "Missing CHOCO_API_KEY secret" }
           choco apikey -k $env:CHOCO_API_KEY -s https://push.chocolatey.org/
