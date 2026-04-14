@@ -12,3 +12,6 @@ Thumbs.db
 .idea/
 .vscode/
 
+# Agent scratch (compound-engineering run artifacts, todo working files)
+.context/
+
