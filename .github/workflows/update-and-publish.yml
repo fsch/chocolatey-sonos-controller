@@ -40,6 +40,15 @@ jobs:
     outputs:
       version: ${{ steps.export.outputs.version }}
       sha256: ${{ steps.export.outputs.sha256 }}
+      # `commit_sha` is the SHA the update job committed and successfully
+      # pushed to main. Empty when no push was attempted or the push failed --
+      # in that case the publish job falls back to the dispatch-time ref and
+      # relies on the artifact handoff for the two tracked files it cares about.
+      commit_sha: ${{ steps.export.outputs.commit_sha }}
+      # `push_outcome` is the result of the `Push to main` step ('success',
+      # 'failure', 'cancelled', or 'skipped'). The publish job consults it to
+      # avoid publishing a version whose source commit never reached main.
+      push_outcome: ${{ steps.push_changes.outcome }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -148,12 +157,22 @@ jobs:
             
             This PR was created because the workflow could not push directly to main or direct push was disabled.
 
-      - name: Export version/sha for publish job
+      - name: Export version/sha/commit for publish job
         id: export
         shell: bash
         run: |
+          set -euo pipefail
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "sha256=$SHA256"   >> "$GITHUB_OUTPUT"
+          # Only expose commit_sha if the push actually succeeded -- otherwise
+          # the SHA points at a commit that no remote has, and publishing from
+          # it would violate the audit trail (and `actions/checkout` in the
+          # publish job would fail to resolve the ref).
+          if [ "${{ steps.push_changes.outcome }}" = "success" ]; then
+            echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          else
+            echo "commit_sha=" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Upload updated package sources
         if: ${{ fromJSON(github.event.inputs.publish) }}
@@ -164,7 +183,12 @@ jobs:
             chocolatey/sonos-controller.nuspec
             chocolatey/ChocolateyInstall.ps1
           if-no-files-found: error
-          retention-days: 1
+          # 7 days gives the environment approver a realistic recovery window
+          # if `choco push` hits a transient failure and the job needs to be
+          # re-run without forcing `update` to re-fetch the installer (the
+          # sonos.com redirect URL is mutable, so a same-day re-fetch could
+          # return different bytes).
+          retention-days: 7
 
   publish:
     # This job consumes CHOCO_API_KEY and is gated by the `chocolatey-publish`
@@ -174,7 +198,16 @@ jobs:
     # stored as an environment-scoped secret (not a repo-level secret).
     # See SECURITY.md.
     needs: update
-    if: ${{ fromJSON(github.event.inputs.publish) }}
+    # Publish runs only when:
+    #   1. the dispatcher requested it (`publish: true`), AND
+    #   2. EITHER the dispatcher opted out of pushing (`commit_push: false`,
+    #      in which case publishing from the artifact is the explicit intent)
+    #      OR the push to main actually succeeded.
+    # This prevents the silent footgun where a failed push falls back to a PR
+    # and the package is still published from a commit that never reached main.
+    if: |
+      fromJSON(github.event.inputs.publish) &&
+      (!fromJSON(github.event.inputs.commit_push) || needs.update.outputs.push_outcome == 'success')
     runs-on: windows-latest
     timeout-minutes: 15
     environment: chocolatey-publish
@@ -187,6 +220,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          # Pin to the exact commit the update job pushed to main. Empty when
+          # `commit_push: false` -- in that case we fall back to the dispatch-
+          # time ref and rely on the artifact handoff to overlay the two
+          # tracked files that matter for packing.
+          ref: ${{ needs.update.outputs.commit_sha }}
           persist-credentials: false
 
       - name: Download updated package sources
