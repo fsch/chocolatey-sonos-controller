@@ -4,6 +4,14 @@ permissions:
   contents: write
   pull-requests: write
 
+# Serialize workflow_dispatch runs so back-to-back triggers can't interleave
+# commits or collide on the `package-sources` artifact name. We do NOT cancel
+# an in-progress run -- letting one finish (including environment approval) is
+# safer than cancelling mid-publish.
+concurrency:
+  group: update-and-publish
+  cancel-in-progress: false
+
 on:
   workflow_dispatch:
     inputs:
@@ -28,6 +36,7 @@ on:
 jobs:
   update:
     runs-on: windows-latest
+    timeout-minutes: 20
     outputs:
       version: ${{ steps.export.outputs.version }}
       sha256: ${{ steps.export.outputs.sha256 }}
@@ -167,10 +176,18 @@ jobs:
     needs: update
     if: ${{ fromJSON(github.event.inputs.publish) }}
     runs-on: windows-latest
+    timeout-minutes: 15
     environment: chocolatey-publish
+    # This job handles CHOCO_API_KEY. It does not need write access to the
+    # repository or PRs, so we narrow permissions from the workflow default
+    # (contents: write, pull-requests: write) down to read-only.
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Download updated package sources
         uses: actions/download-artifact@v4
