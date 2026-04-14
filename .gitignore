@@ -15,3 +15,8 @@ Thumbs.db
 # Agent scratch (compound-engineering run artifacts, todo working files)
 .context/
 
+# Compound-engineering planning/solution artifacts -- kept local, not tracked
+# in this repo. The package itself is small enough that internal plans and
+# learnings don't need to live alongside the public source.
+docs/
+
