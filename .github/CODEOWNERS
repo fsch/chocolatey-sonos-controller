@@ -1,0 +1,19 @@
+# Code owners for chocolatey-sonos-controller.
+#
+# Paths below require review from @fsch before merging. This is the in-repo
+# half of the rule; the enforcement half lives in branch protection on `main`
+# (require review from Code Owners). Without that branch-protection setting,
+# CODEOWNERS only requests review, it does not require it.
+
+# Publish and CI workflows — any change here can affect how CHOCO_API_KEY is used.
+/.github/workflows/   @fsch
+/.github/CODEOWNERS   @fsch
+
+# Package definition — nuspec, install script, and anything that decides what
+# ends up in the published .nupkg.
+/chocolatey/          @fsch
+
+# Legal and security surfaces.
+/LICENSE              @fsch
+/SECURITY.md          @fsch
+/README.md            @fsch

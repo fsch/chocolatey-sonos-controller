@@ -1,6 +1,8 @@
 Sonos Controller S2 — Chocolatey Package
 ========================================
 
+> **Unofficial community Chocolatey package.** This project is not affiliated with, endorsed by, or sponsored by Sonos, Inc. "Sonos" and the Sonos logo are trademarks of Sonos, Inc. This repository packages the **official** Sonos Controller S2 installer by downloading it from Sonos's own public URL (`https://www.sonos.com/redir/controller_software_pc2`); it does not redistribute or modify the installer binary. For issues with the Sonos Controller software itself, contact Sonos support. For issues with this Chocolatey package, see [SECURITY.md](SECURITY.md) or open an issue.
+
 This repository contains the Chocolatey package definition for the Sonos Controller S2 desktop app. It includes the nuspec metadata, the PowerShell install script, and GitHub Actions to manually update, pack, and optionally publish the package.
 
 Getting Started
@@ -31,6 +33,12 @@ Contributing
 ------------
 See `AGENTS.md` for contribution guidelines. Please avoid committing binaries or secrets. Open an issue for major changes.
 
+Reporting Issues & Security
+---------------------------
+- **Package bugs or questions:** open a GitHub issue.
+- **Security vulnerabilities in this packaging code or the publish workflow:** see `SECURITY.md` for private reporting.
+- **Vulnerabilities in the Sonos Controller software itself:** report to Sonos directly — this project does not modify the upstream installer.
+
 License
 -------
-MIT. See `LICENSE`.
+MIT. See `LICENSE`. The MIT license covers only this packaging repository (the nuspec, install script, and workflows). The Sonos Controller S2 installer is distributed by Sonos under its own license terms.
