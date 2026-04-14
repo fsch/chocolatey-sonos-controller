@@ -1,9 +1,23 @@
 Sonos Controller S2 — Chocolatey Package
 ========================================
 
+[![Chocolatey Version](https://img.shields.io/chocolatey/v/sonos-controller?label=chocolatey&color=brightgreen)](https://community.chocolatey.org/packages/sonos-controller)
+[![Chocolatey Downloads](https://img.shields.io/chocolatey/dt/sonos-controller?label=downloads)](https://community.chocolatey.org/packages/sonos-controller)
+[![CI](https://github.com/fsch/chocolatey-sonos-controller/actions/workflows/ci.yml/badge.svg)](https://github.com/fsch/chocolatey-sonos-controller/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/github/license/fsch/chocolatey-sonos-controller)](LICENSE)
+
 > **Unofficial community Chocolatey package.** This project is not affiliated with, endorsed by, or sponsored by Sonos, Inc. "Sonos" and the Sonos logo are trademarks of Sonos, Inc. This repository packages the **official** Sonos Controller S2 installer by downloading it from Sonos's own public URL (`https://www.sonos.com/redir/controller_software_pc2`); it does not redistribute or modify the installer binary. For issues with the Sonos Controller software itself, contact Sonos support. For issues with this Chocolatey package, see [SECURITY.md](SECURITY.md) or open an issue.
 
 This repository contains the Chocolatey package definition for the Sonos Controller S2 desktop app. It includes the nuspec metadata, the PowerShell install script, and GitHub Actions to manually update, pack, and optionally publish the package.
+
+Install
+-------
+
+```powershell
+choco install sonos-controller
+```
+
+The package is published at https://community.chocolatey.org/packages/sonos-controller.
 
 Getting Started
 ---------------
