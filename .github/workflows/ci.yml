@@ -36,7 +36,26 @@ jobs:
           test -n "$pu" || { echo "PS1 missing $url"; exit 1; }
           test -n "$ph" || { echo "PS1 missing $checksum"; exit 1; }
 
+          # The www.sonos.com/redir/* shortlink is behind Akamai bot management
+          # and returns HTTP 403 to Chocolatey's downloader, so a package
+          # pointing at it cannot install. Only the direct, version-pinned
+          # update-software.sonos.com URL works unattended.
+          case "$pu" in
+            https://www.sonos.com/redir/*|https://sonos.com/redir/*)
+              echo "PS1 \$url points at the bot-protected sonos.com/redir shortlink (403s for non-browser clients). Use the direct update-software.sonos.com URL."; exit 1;;
+            https://*) ;;
+            *) echo "PS1 \$url must be an https URL"; exit 1;;
+          esac
+
+          # A SHA256 must be 64 lowercase hex chars; anything else means the
+          # checksum was never substituted or got mangled.
+          echo "$ph" | grep -Eq '^[0-9a-f]{64}$' || { echo "PS1 \$checksum is not a lowercase sha256 hex digest"; exit 1; }
+
       - name: Ensure no binaries committed
         shell: bash
         run: |
-          ! git ls-files | grep -Ei '\\.(exe|msi|zip|7z|nupkg)$' || { echo "Binary artifacts should not be committed"; exit 1; }
+          # NOTE: the pattern is '\.', not '\\.'. Inside bash single quotes the
+          # latter is a literal backslash followed by "any char", so the check
+          # only ever matched paths containing a backslash -- i.e. it passed
+          # unconditionally and never blocked a committed binary.
+          ! git ls-files | grep -Ei '\.(exe|msi|zip|7z|nupkg)$' || { echo "Binary artifacts should not be committed"; exit 1; }

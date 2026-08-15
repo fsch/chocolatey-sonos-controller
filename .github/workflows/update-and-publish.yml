@@ -16,12 +16,22 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Optional: override version (else auto-detect from EXE)"
+        description: "Optional: override version (else auto-detect from URL filename, then EXE)"
         required: false
       url:
-        description: "Download URL for Sonos Controller"
+        # Must be the direct, version-pinned installer URL, e.g.
+        #   https://update-software.sonos.com/software/<id>/Sonos_90.0-77070.exe
+        #
+        # Do NOT use https://www.sonos.com/redir/controller_software_pc2 here.
+        # That shortlink is behind Akamai bot management and returns HTTP 403 to
+        # every non-browser client (curl, Invoke-WebRequest, Chocolatey's own
+        # downloader), so both this workflow and `choco install` fail on it.
+        # To get the direct URL: open the Sonos downloads page in a browser,
+        # start the Windows download, then copy the resolved URL from the
+        # browser's download list (or read the HostUrl from the downloaded
+        # file's Zone.Identifier alternate data stream).
+        description: "Direct installer URL (update-software.sonos.com/software/<id>/Sonos_<ver>.exe)"
         required: true
-        default: "https://www.sonos.com/redir/controller_software_pc2"
       commit_push:
         description: "Commit and push updated files"
         required: true
@@ -65,8 +75,45 @@ jobs:
       - name: Download installer
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
+          $ProgressPreference    = 'SilentlyContinue'
           New-Item -ItemType Directory -Force -Path downloads | Out-Null
-          Invoke-WebRequest -Uri "$env:PKG_URL" -OutFile downloads/sonos-controller.exe
+
+          if ($env:PKG_URL -match '^https?://(www\.)?sonos\.com/redir/') {
+            throw @"
+          Refusing to download from the www.sonos.com/redir/ shortlink.
+          It is bot-protected (Akamai) and answers scripted clients with HTTP 403,
+          so both this workflow and 'choco install' would fail on it.
+          Re-run with the direct, version-pinned URL instead, e.g.
+            https://update-software.sonos.com/software/<id>/Sonos_90.0-77070.exe
+          "@
+          }
+
+          try {
+            Invoke-WebRequest -Uri "$env:PKG_URL" -OutFile downloads/sonos-controller.exe -MaximumRedirection 10 -UseBasicParsing
+          } catch {
+            throw "Download failed for $env:PKG_URL -- $($_.Exception.Message)"
+          }
+
+          # Validate we actually got an installer and not an HTML error page. A
+          # bot-protection or CDN error page can arrive with HTTP 200, in which
+          # case the run would otherwise happily hash the HTML and publish a
+          # package whose checksum matches a few hundred bytes of markup.
+          $file = Get-Item downloads/sonos-controller.exe
+          if ($file.Length -lt 10MB) {
+            throw "Downloaded file is only $($file.Length) bytes -- expected a ~55 MB installer. The URL likely returned an error page."
+          }
+          $fs = [System.IO.File]::OpenRead($file.FullName)
+          try {
+            $head = New-Object byte[] 2
+            $null = $fs.Read($head, 0, 2)
+          } finally {
+            $fs.Dispose()
+          }
+          if ($head[0] -ne 0x4D -or $head[1] -ne 0x5A) {
+            throw "Downloaded file is not a Windows executable (missing 'MZ' header)."
+          }
+          Write-Host "Downloaded $($file.Length) bytes from $env:PKG_URL"
 
       - name: Compute SHA256
         shell: pwsh
@@ -74,23 +121,52 @@ jobs:
           $hash = (Get-FileHash downloads/sonos-controller.exe -Algorithm SHA256).Hash.ToLower()
           echo "SHA256=$hash" >> $env:GITHUB_ENV
 
-      - name: Extract version from EXE (if not provided)
+      - name: Determine version (if not provided)
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           if (-not $env:VERSION -or -not $env:VERSION.Trim()) {
-            $vi = (Get-Item 'downloads/sonos-controller.exe').VersionInfo
             function Normalize-Version($s) {
               if (-not $s) { return $null }
               $m = [regex]::Match($s, '(\d+\.\d+\.\d+(?:\.\d+)?)')
               if ($m.Success) { return $m.Value } else { return $null }
             }
+
+            # 1. The installer filename is the most reliable source and the one
+            #    that matches the published package series: Sonos_90.0-77070.exe
+            #    -> 90.0.77070. EXE metadata has historically disagreed with it
+            #    (FileVersion reporting a 16.x app version while the download and
+            #    the Chocolatey package both track the 90.x series), and shipping
+            #    a 16.x version would be rejected as going backwards from 90.x.
+            $name = [System.IO.Path]::GetFileName(([uri]$env:PKG_URL).AbsolutePath)
+            $m = [regex]::Match($name, 'Sonos[_-](\d+\.\d+)-(\d+)')
+            $fromName = if ($m.Success) { "$($m.Groups[1].Value).$($m.Groups[2].Value)" } else { $null }
+
+            # 2. Fall back to EXE metadata, ProductVersion first -- both fields
+            #    currently report the 90.x series.
+            $vi   = (Get-Item 'downloads/sonos-controller.exe').VersionInfo
             $prod = Normalize-Version $vi.ProductVersion
             $file = Normalize-Version $vi.FileVersion
 
-            # Prefer FileVersion (e.g., 16.x) over ProductVersion (e.g., 90.x)
-            $ver = if ($file) { $file } elseif ($prod) { $prod } else { $null }
-            if (-not $ver) { throw 'No version info found on EXE' }
+            $ver = if ($fromName) { $fromName } elseif ($prod) { $prod } elseif ($file) { $file } else { $null }
+            if (-not $ver) { throw 'Could not determine a version from the URL filename or the EXE metadata' }
+            Write-Host "Version sources -- filename: $fromName, ProductVersion: $prod, FileVersion: $file -> using $ver"
             echo "VERSION=$ver" >> $env:GITHUB_ENV
+          }
+
+      - name: Guard against non-increasing version
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $current = [regex]::Match((Get-Content chocolatey/sonos-controller.nuspec -Raw), '<version>(.*?)</version>').Groups[1].Value
+          # Chocolatey rejects a push whose version is already published, and a
+          # lower version would silently downgrade the package feed. Catch both
+          # here rather than after the installer has been fetched and committed.
+          if ([version]$env:VERSION -lt [version]$current) {
+            throw "Refusing to go backwards: detected $env:VERSION is lower than the packaged $current."
+          }
+          if ([version]$env:VERSION -eq [version]$current) {
+            Write-Host "::warning::Version $env:VERSION already matches the packaged version -- nothing to commit, and 'choco push' will reject it as a duplicate."
           }
 
       - name: Update nuspec and install script
