@@ -6,7 +6,7 @@ Sonos Controller S2 — Chocolatey Package
 [![CI](https://github.com/fsch/chocolatey-sonos-controller/actions/workflows/ci.yml/badge.svg)](https://github.com/fsch/chocolatey-sonos-controller/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/github/license/fsch/chocolatey-sonos-controller)](LICENSE)
 
-> **Unofficial community Chocolatey package.** This project is not affiliated with, endorsed by, or sponsored by Sonos, Inc. "Sonos" and the Sonos logo are trademarks of Sonos, Inc. This repository packages the **official** Sonos Controller S2 installer by downloading it from Sonos's own public URL (`https://www.sonos.com/redir/controller_software_pc2`); it does not redistribute or modify the installer binary. For issues with the Sonos Controller software itself, contact Sonos support. For issues with this Chocolatey package, see [SECURITY.md](SECURITY.md) or open an issue.
+> **Unofficial community Chocolatey package.** This project is not affiliated with, endorsed by, or sponsored by Sonos, Inc. "Sonos" and the Sonos logo are trademarks of Sonos, Inc. This repository packages the **official** Sonos Controller S2 installer by downloading it from Sonos's own public URL (`https://update-software.sonos.com/software/<id>/Sonos_<version>.exe`); it does not redistribute or modify the installer binary. For issues with the Sonos Controller software itself, contact Sonos support. For issues with this Chocolatey package, see [SECURITY.md](SECURITY.md) or open an issue.
 
 This repository contains the Chocolatey package definition for the Sonos Controller S2 desktop app. It includes the nuspec metadata, the PowerShell install script, and GitHub Actions to manually update, pack, and optionally publish the package.
 
@@ -27,10 +27,24 @@ Getting Started
 Manual Update & Publish (GitHub Actions)
 ----------------------------------------
 Use the workflow “Update and Publish Chocolatey Package”:
-- `url`: default is the official Sonos download URL.
-- `version` (optional): if omitted, the workflow extracts the EXE FileVersion (preferred; e.g., 16.x). It falls back to ProductVersion if FileVersion is unavailable.
+- `url`: the direct, version-pinned installer URL, e.g. `https://update-software.sonos.com/software/rT0797IawE/Sonos_90.0-77070.exe`. See “Getting the download URL” below — the old `https://www.sonos.com/redir/controller_software_pc2` shortlink no longer works for scripted clients and the workflow rejects it.
+- `version` (optional): if omitted, the workflow derives it from the installer filename (`Sonos_90.0-77070.exe` → `90.0.77070`), falling back to the EXE ProductVersion and then FileVersion. It refuses to publish a version lower than the one already packaged.
 - `commit_push`: commit updated files to `main`.
 - `publish`: build `.nupkg` and push to Chocolatey (needs `CHOCO_API_KEY` secret).
+
+Getting the download URL
+------------------------
+`https://www.sonos.com/redir/controller_software_pc2` is fronted by Akamai bot management and answers every non-browser client — `curl`, `Invoke-WebRequest`, and Chocolatey's own downloader — with **HTTP 403**. A package pointing at it cannot install, so the URL must be the direct one:
+
+1. Open <https://support.sonos.com/en-us/downloads> in a browser and start the Windows download.
+2. Copy the resolved URL from the browser's download list, or read it off the saved file:
+
+```powershell
+Get-Content "$env:USERPROFILE\Downloads\Sonos_90.0-77070.exe" -Stream Zone.Identifier
+# HostUrl=https://update-software.sonos.com/software/rT0797IawE/Sonos_90.0-77070.exe
+```
+
+The path segment (`rT0797IawE` above) changes with each release, so this step is manual per update.
 
 Notes
 -----

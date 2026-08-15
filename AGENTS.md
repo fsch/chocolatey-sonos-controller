@@ -25,8 +25,8 @@
 ## Commit & Pull Request Guidelines
 - Commits: imperative tense, concise scope (e.g., "chore: update to 16.0.0.401").
 - PRs: include version, URL, checksum, validation steps, and link any related issues. Screenshots optional.
-- CI: `CI` checks ensure nuspec/PS1 consistency and block binaries. Use `Update and Publish Chocolatey Package` (manual) to update/publish. If `version` is not provided, the workflow auto-detects the EXE FileVersion (prefers 16.x), falling back to ProductVersion.
+- CI: `CI` checks ensure nuspec/PS1 consistency, reject the bot-protected `sonos.com/redir` URL, and block binaries. Use `Update and Publish Chocolatey Package` (manual) to update/publish. If `version` is not provided, the workflow derives it from the installer filename (`Sonos_90.0-77070.exe` → `90.0.77070`), falling back to the EXE ProductVersion and then FileVersion.
 
 ## Security & Configuration Tips
 - Never commit downloaded binaries or secrets. Configure Chocolatey API key locally: `choco apikey -k <KEY> -s https://push.chocolatey.org/`.
-- Only use the official Sonos download URL in package metadata.
+- Only use the official Sonos download URL in package metadata: the direct, version-pinned `https://update-software.sonos.com/software/<id>/Sonos_<version>.exe`. The `https://www.sonos.com/redir/controller_software_pc2` shortlink is bot-protected (HTTP 403 for non-browser clients) and must not be used — see README for how to obtain the direct URL.
