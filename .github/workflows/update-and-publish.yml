@@ -2,12 +2,11 @@ name: Update and Publish Chocolatey Package
 
 permissions:
   contents: write
-  pull-requests: write
 
 # Serialize workflow_dispatch runs so back-to-back triggers can't interleave
-# commits or collide on the `package-sources` artifact name. We do NOT cancel
-# an in-progress run -- letting one finish (including environment approval) is
-# safer than cancelling mid-publish.
+# commits or collide on the update branch. We do NOT cancel an in-progress run
+# -- letting one finish (including environment approval) is safer than
+# cancelling mid-publish.
 concurrency:
   group: update-and-publish
   cancel-in-progress: false
@@ -32,13 +31,27 @@ on:
         # file's Zone.Identifier alternate data stream).
         description: "Direct installer URL (update-software.sonos.com/software/<id>/Sonos_<ver>.exe)"
         required: true
-      commit_push:
-        description: "Commit and push updated files"
+      push_branch:
+        # `main` is a protected branch: pushes to it are rejected with GH006
+        # ("Changes must be made through a pull request"), so this workflow can
+        # never commit the update directly. It pushes an auto/choco-update-*
+        # branch -- which protection allows -- and prints a compare link for you
+        # to open the PR from. It deliberately does not call the GitHub PR API:
+        # "Allow GitHub Actions to create and approve pull requests" is off for
+        # this repo, so an API-created PR fails, and turning it on would grant
+        # Actions PR-creation rights repo-wide just to save one click.
+        description: "Push updated files to an auto/choco-update-* branch and print a PR link"
         required: true
         type: boolean
         default: true
       publish:
-        description: "Pack and push to Chocolatey"
+        # Publishing packs whatever is committed at the checked-out ref, so the
+        # update PR must be merged first. The usual sequence is two runs:
+        #   1. push_branch: true,  publish: false  -> open and merge the PR
+        #   2. push_branch: false, publish: true   -> pack and push from main
+        # The publish job verifies the packaged files actually match the
+        # resolved version and checksum, and fails loudly if they do not.
+        description: "Pack and push to Chocolatey (requires the update PR to be merged first)"
         required: true
         type: boolean
         default: false
@@ -50,15 +63,6 @@ jobs:
     outputs:
       version: ${{ steps.export.outputs.version }}
       sha256: ${{ steps.export.outputs.sha256 }}
-      # `commit_sha` is the SHA the update job committed and successfully
-      # pushed to main. Empty when no push was attempted or the push failed --
-      # in that case the publish job falls back to the dispatch-time ref and
-      # relies on the artifact handoff for the two tracked files it cares about.
-      commit_sha: ${{ steps.export.outputs.commit_sha }}
-      # `push_outcome` is the result of the `Push to main` step ('success',
-      # 'failure', 'cancelled', or 'skipped'). The publish job consults it to
-      # avoid publishing a version whose source commit never reached main.
-      push_outcome: ${{ steps.push_changes.outcome }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -197,12 +201,18 @@ jobs:
           # engine then reads as an escaped literal $. Single quotes inside
           # a single-quoted string are escaped by doubling them ('').
           # The replacement strings stay double-quoted so $env:VERSION etc.
-          # still interpolate; the literal $version in the output is
-          # protected by the backtick escape (`$version).
+          # still interpolate; `${1} is backtick-escaped so PowerShell leaves
+          # it for the .NET regex engine as a capture-group reference.
+          #
+          # Capturing the assignment prefix (name + whitespace + '=') and
+          # replaying it keeps the install script's tab alignment intact.
+          # Rewriting it as a plain "$version = " instead reflowed three lines
+          # on every run, so even a re-run that changed nothing produced a
+          # commit -- pure noise in the history and in the update PR.
           (Get-Content $ps1) `
-            -replace '\$version\s*=\s*''.*?''',  "`$version = '$env:VERSION'" `
-            -replace '\$url\s*=\s*''.*?''',      "`$url = '$env:PKG_URL'" `
-            -replace '\$checksum\s*=\s*''.*?''', "`$checksum = '$env:SHA256'" `
+            -replace '(\$version\s*=\s*)''.*?''',  "`${1}'$env:VERSION'" `
+            -replace '(\$url\s*=\s*)''.*?''',      "`${1}'$env:PKG_URL'" `
+            -replace '(\$checksum\s*=\s*)''.*?''', "`${1}'$env:SHA256'" `
             | Set-Content $ps1 -Encoding UTF8
 
       - name: Show changes
@@ -211,6 +221,7 @@ jobs:
           git --no-pager diff -- chocolatey/sonos-controller.nuspec chocolatey/ChocolateyInstall.ps1 || true
 
       - name: Commit changes
+        id: commit
         shell: bash
         run: |
           set -euo pipefail
@@ -218,71 +229,50 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add chocolatey/sonos-controller.nuspec chocolatey/ChocolateyInstall.ps1
           if git diff --cached --quiet; then
-            echo "No changes to commit"; exit 0;
+            echo "No changes to commit -- the packaged files already describe $VERSION"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
           git commit -m "chore: update to $VERSION (hash $SHA256)"
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
 
-      - name: Push to main
-        id: push_changes
-        if: ${{ fromJSON(github.event.inputs.commit_push) }}
-        continue-on-error: true
+      - name: Push update branch and print PR link
+        if: ${{ fromJSON(github.event.inputs.push_branch) && steps.commit.outputs.has_changes == 'true' }}
         shell: bash
         env:
           REPO: ${{ github.repository }}
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SERVER: ${{ github.server_url }}
         run: |
           set -euo pipefail
+          BRANCH="auto/choco-update-${VERSION}"
           git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${REPO}.git"
-          git push origin HEAD:main
+          # --force so a re-run for the same version replaces its own stale
+          # branch instead of failing on a non-fast-forward. Only auto/* branches
+          # are ever targeted, and they are owned entirely by this workflow.
+          git push --force origin "HEAD:refs/heads/${BRANCH}"
 
-      - name: Create Pull Request (fallback or when push disabled)
-        if: ${{ !fromJSON(github.event.inputs.commit_push) || steps.push_changes.outcome != 'success' }}
-        uses: peter-evans/create-pull-request@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "chore: update to ${{ env.VERSION }} (hash ${{ env.SHA256 }})"
-          branch: "auto/choco-update-${{ env.VERSION }}"
-          title: "chore: update to ${{ env.VERSION }}"
-          body: |
-            Automated update:
-            - Version: ${{ env.VERSION }}
-            - URL: ${{ env.PKG_URL }}
-            - SHA256: ${{ env.SHA256 }}
-            
-            This PR was created because the workflow could not push directly to main or direct push was disabled.
+          LINK="${SERVER}/${REPO}/compare/main...${BRANCH}?expand=1"
+          echo "::notice title=Open the update PR::${LINK}"
+          {
+            echo "## Sonos Controller ${VERSION}"
+            echo
+            echo "- URL: \`${PKG_URL}\`"
+            echo "- SHA256: \`${SHA256}\`"
+            echo "- Branch: \`${BRANCH}\`"
+            echo
+            echo "**[Open the pull request](${LINK})**"
+            echo
+            echo "After merging, re-run this workflow with \`push_branch: false\` and \`publish: true\` to push ${VERSION} to Chocolatey."
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Export version/sha/commit for publish job
+      - name: Export version/sha for publish job
         id: export
         shell: bash
         run: |
           set -euo pipefail
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "sha256=$SHA256"   >> "$GITHUB_OUTPUT"
-          # Only expose commit_sha if the push actually succeeded -- otherwise
-          # the SHA points at a commit that no remote has, and publishing from
-          # it would violate the audit trail (and `actions/checkout` in the
-          # publish job would fail to resolve the ref).
-          if [ "${{ steps.push_changes.outcome }}" = "success" ]; then
-            echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          else
-            echo "commit_sha=" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Upload updated package sources
-        if: ${{ fromJSON(github.event.inputs.publish) }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: package-sources
-          path: |
-            chocolatey/sonos-controller.nuspec
-            chocolatey/ChocolateyInstall.ps1
-          if-no-files-found: error
-          # 7 days gives the environment approver a realistic recovery window
-          # if `choco push` hits a transient failure and the job needs to be
-          # re-run without forcing `update` to re-fetch the installer (the
-          # sonos.com redirect URL is mutable, so a same-day re-fetch could
-          # return different bytes).
-          retention-days: 7
 
   publish:
     # This job consumes CHOCO_API_KEY and is gated by the `chocolatey-publish`
@@ -292,40 +282,56 @@ jobs:
     # stored as an environment-scoped secret (not a repo-level secret).
     # See SECURITY.md.
     needs: update
-    # Publish runs only when:
-    #   1. the dispatcher requested it (`publish: true`), AND
-    #   2. EITHER the dispatcher opted out of pushing (`commit_push: false`,
-    #      in which case publishing from the artifact is the explicit intent)
-    #      OR the push to main actually succeeded.
-    # This prevents the silent footgun where a failed push falls back to a PR
-    # and the package is still published from a commit that never reached main.
-    if: |
-      fromJSON(github.event.inputs.publish) &&
-      (!fromJSON(github.event.inputs.commit_push) || needs.update.outputs.push_outcome == 'success')
+    if: ${{ fromJSON(github.event.inputs.publish) }}
     runs-on: windows-latest
     timeout-minutes: 15
     environment: chocolatey-publish
     # This job handles CHOCO_API_KEY. It does not need write access to the
-    # repository or PRs, so we narrow permissions from the workflow default
-    # (contents: write, pull-requests: write) down to read-only.
+    # repository, so we narrow permissions from the workflow default
+    # (contents: write) down to read-only.
     permissions:
       contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Pin to the exact commit the update job pushed to main. Empty when
-          # `commit_push: false` -- in that case we fall back to the dispatch-
-          # time ref and rely on the artifact handoff to overlay the two
-          # tracked files that matter for packing.
-          ref: ${{ needs.update.outputs.commit_sha }}
           persist-credentials: false
 
-      - name: Download updated package sources
-        uses: actions/download-artifact@v4
-        with:
-          name: package-sources
-          path: chocolatey
+      - name: Verify the committed package matches the resolved installer
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.update.outputs.version }}
+          SHA256:  ${{ needs.update.outputs.sha256 }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Pack whatever is committed at this ref -- never an artifact overlay
+          # of files that exist only inside the run. If the update PR has not
+          # been merged yet, the checkout still describes the previous release,
+          # and publishing it would ship a .nupkg that no commit in the repo
+          # corresponds to. Fail here instead, with the fix spelled out.
+          $nuspecVersion = [regex]::Match((Get-Content chocolatey/sonos-controller.nuspec -Raw), '<version>(.*?)</version>').Groups[1].Value
+          $ps1 = Get-Content chocolatey/ChocolateyInstall.ps1 -Raw
+          $ps1Version  = [regex]::Match($ps1, '\$version\s*=\s*''(.*?)''').Groups[1].Value
+          $ps1Checksum = [regex]::Match($ps1, '\$checksum\s*=\s*''(.*?)''').Groups[1].Value
+
+          $problems = @()
+          if ($nuspecVersion -ne $env:VERSION)  { $problems += "nuspec version is $nuspecVersion, expected $env:VERSION" }
+          if ($ps1Version   -ne $env:VERSION)  { $problems += "install script version is $ps1Version, expected $env:VERSION" }
+          if ($ps1Checksum  -ne $env:SHA256)   { $problems += "install script checksum is $ps1Checksum, expected $env:SHA256" }
+
+          if ($problems) {
+            # $($env:VERSION), not $env:VERSION: -- a colon straight after the
+            # name is parsed as part of the variable path and swallows it.
+            throw @"
+          The checked-out repository does not describe $($env:VERSION):
+            - $($problems -join "`n  - ")
+
+          Merge the update PR first (re-run with push_branch: true if it does not
+          exist yet), then re-run this workflow with push_branch: false and
+          publish: true.
+          "@
+          }
+          Write-Host "Verified: repository at this ref describes $env:VERSION / $env:SHA256"
 
       - name: Pack and Push to Chocolatey
         shell: pwsh
