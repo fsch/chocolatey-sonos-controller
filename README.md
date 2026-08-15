@@ -26,11 +26,19 @@ Getting Started
 
 Manual Update & Publish (GitHub Actions)
 ----------------------------------------
-Use the workflow “Update and Publish Chocolatey Package”:
+`main` is protected (PRs only, with a code-owner review), so the workflow cannot commit an update itself. Updating is two runs of “Update and Publish Chocolatey Package”:
+
+**Run 1 — prepare the update** (`push_branch: true`, `publish: false`)
+It downloads the installer, resolves the version and checksum, updates the two package files, and pushes `auto/choco-update-<version>`. The run summary contains a one-click link to open the PR. Review and merge it.
+
+**Run 2 — publish** (`push_branch: false`, `publish: true`)
+It packs from the now-merged `main` and pushes to Chocolatey. Before packing it verifies the committed files actually describe the resolved version and checksum, so a forgotten merge fails loudly instead of publishing a `.nupkg` that matches no commit.
+
+Inputs:
 - `url`: the direct, version-pinned installer URL, e.g. `https://update-software.sonos.com/software/rT0797IawE/Sonos_90.0-77070.exe`. See “Getting the download URL” below — the old `https://www.sonos.com/redir/controller_software_pc2` shortlink no longer works for scripted clients and the workflow rejects it.
-- `version` (optional): if omitted, the workflow derives it from the installer filename (`Sonos_90.0-77070.exe` → `90.0.77070`), falling back to the EXE ProductVersion and then FileVersion. It refuses to publish a version lower than the one already packaged.
-- `commit_push`: commit updated files to `main`.
-- `publish`: build `.nupkg` and push to Chocolatey (needs `CHOCO_API_KEY` secret).
+- `version` (optional): if omitted, derived from the installer filename (`Sonos_90.0-77070.exe` → `90.0.77070`), falling back to the EXE ProductVersion and then FileVersion. A version lower than the packaged one aborts the run.
+- `push_branch`: push the updated files to `auto/choco-update-<version>` and print the PR link.
+- `publish`: pack and push to Chocolatey (needs the `CHOCO_API_KEY` secret; gated behind the `chocolatey-publish` environment approval).
 
 Getting the download URL
 ------------------------
@@ -48,7 +56,8 @@ The path segment (`rT0797IawE` above) changes with each release, so this step is
 
 Notes
 -----
-- The workflow requests `contents: write` permission. If it cannot push to `main` (e.g., branch protections), it automatically opens a PR with the changes.
+- The workflow pushes a branch and prints a compare link rather than calling the PR API. “Allow GitHub Actions to create and approve pull requests” is off for this repo, and granting Actions repo-wide PR-creation rights just to save one click isn't worth it.
+- It requests only `contents: write`, and the publish job narrows that to `contents: read`.
 
 Local Build & Test
 ------------------

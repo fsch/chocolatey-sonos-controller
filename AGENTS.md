@@ -26,6 +26,7 @@
 - Commits: imperative tense, concise scope (e.g., "chore: update to 16.0.0.401").
 - PRs: include version, URL, checksum, validation steps, and link any related issues. Screenshots optional.
 - CI: `CI` checks ensure nuspec/PS1 consistency, reject the bot-protected `sonos.com/redir` URL, and block binaries. Use `Update and Publish Chocolatey Package` (manual) to update/publish. If `version` is not provided, the workflow derives it from the installer filename (`Sonos_90.0-77070.exe` → `90.0.77070`), falling back to the EXE ProductVersion and then FileVersion.
+- `main` is protected, so updating takes two runs of that workflow: first `push_branch: true, publish: false` (pushes `auto/choco-update-<version>` and prints a PR link — merge it), then `push_branch: false, publish: true` (packs from the merged `main` and pushes to Chocolatey). The publish job refuses to pack a checkout that doesn't already describe the resolved version and checksum.
 
 ## Security & Configuration Tips
 - Never commit downloaded binaries or secrets. Configure Chocolatey API key locally: `choco apikey -k <KEY> -s https://push.chocolatey.org/`.
